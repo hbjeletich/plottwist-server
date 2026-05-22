@@ -9,6 +9,10 @@
 
 const WebSocket = require("ws");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
+
+const LOG_FILE = path.join(__dirname, "stories.json");
 
 const PORT = process.env.PORT || 8080;
 
@@ -50,6 +54,41 @@ const httpServer = http.createServer((req, res) => {
     res.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
     return;
   }
+
+  if (req.method === "POST" && req.url === "/log-story") {
+    let body = "";
+    req.on("data", chunk => body += chunk);
+    req.on("end", () => {
+      try {
+        const story = JSON.parse(body);
+        story.timestamp = new Date().toISOString();
+
+        let stories = [];
+        try { stories = JSON.parse(fs.readFileSync(LOG_FILE, "utf8")); } catch {}
+        stories.push(story);
+        fs.writeFileSync(LOG_FILE, JSON.stringify(stories, null, 2));
+
+        console.log(`[log] Story logged — tone:${story.tone} outcome:${story.climaxOutcome} players:${story.playerCount}`);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+      }
+    });
+    return;
+  }
+
+  if (req.url === "/stories") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    try {
+      res.end(fs.readFileSync(LOG_FILE, "utf8"));
+    } catch {
+      res.end("[]");
+    }
+    return;
+  }
+
   res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("Game relay server is running.");
 });
